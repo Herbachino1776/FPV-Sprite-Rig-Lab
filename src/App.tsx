@@ -100,15 +100,15 @@ function App() {
   return (
     <main className="appShell">
       <header className="hero">
-        <div>
-          <p className="eyebrow">Three.js dungeon crawler tool</p>
+        <div className="heroCopy">
+          <p className="eyebrow">Browser-only sprite rigging tool</p>
           <h1>FPV Sprite Rig Lab</h1>
-          <p>Browser-only arm and weapon animation strip generator. No backend, no paid services, transparent exports.</p>
+          <p className="heroDescription">Rig arm and weapon layers, tune frame offsets, and export transparent animation strips.</p>
         </div>
-        <div className="status">{message}</div>
+        <div className="status" aria-live="polite">{message}</div>
       </header>
-      <div className="workspace">
-        <aside className="sidebar left">
+      <div className="workspace" aria-label="Sprite rig editor workspace">
+        <aside className="sidebar left" aria-label="Asset and layer controls">
           <AssetUploader onAddLayer={addLayer} onBackgroundUpload={(src) => setProject((p) => ({ ...p, backgroundImageSrc: src, backgroundMode: 'screenshot' }))} />
           <LayerPanel
             layers={project.layers}
@@ -125,7 +125,19 @@ function App() {
           onSelectLayer={setSelectedLayerId}
           onMoveLayer={moveBaseLayer}
         />
-        <aside className="sidebar right">
+        <aside className="sidebar right" aria-label="Transform, animation, and export controls">
+          <Timeline
+            project={project}
+            selectedLayerId={selectedLayerId}
+            isPlaying={isPlaying}
+            onAnimationChange={changeAnimation}
+            onFrameChange={(frame) => setProject((current) => setActiveFrame(current, frame))}
+            onFrameOffsetPatch={patchFrameOffset}
+            onFpsChange={(fps) => setProject((current) => ({ ...current, settings: { ...current.settings, fps: Math.max(1, fps || 1) } }))}
+            onTogglePlayback={() => setIsPlaying((playing) => !playing)}
+            onOnionSkinChange={(onionSkin) => setProject((current) => ({ ...current, onionSkin }))}
+            onPreset={(preset) => setProject((current) => preset === 'idle' ? applyIdlePreset(current) : preset === 'slash' ? applySlashPreset(current) : applyStabPreset(current))}
+          />
           <ExportPanel
             project={project}
             onBackgroundMode={(backgroundMode: BackgroundMode) => setProject((p) => ({ ...p, backgroundMode }))}
@@ -136,18 +148,6 @@ function App() {
           />
         </aside>
       </div>
-      <Timeline
-        project={project}
-        selectedLayerId={selectedLayerId}
-        isPlaying={isPlaying}
-        onAnimationChange={changeAnimation}
-        onFrameChange={(frame) => setProject((current) => setActiveFrame(current, frame))}
-        onFrameOffsetPatch={patchFrameOffset}
-        onFpsChange={(fps) => setProject((current) => ({ ...current, settings: { ...current.settings, fps: Math.max(1, fps || 1) } }))}
-        onTogglePlayback={() => setIsPlaying((playing) => !playing)}
-        onOnionSkinChange={(onionSkin) => setProject((current) => ({ ...current, onionSkin }))}
-        onPreset={(preset) => setProject((current) => preset === 'idle' ? applyIdlePreset(current) : preset === 'slash' ? applySlashPreset(current) : applyStabPreset(current))}
-      />
     </main>
   );
 }
