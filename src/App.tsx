@@ -9,14 +9,16 @@ import {
   applyIdlePreset,
   applySlashPreset,
   applyStabPreset,
+  createBlankProject,
   removeLayerFromProject,
-  setFrameTransform,
-  syncLayersToFrame,
+  setActiveFrame,
+  setFrameOffset,
 } from './lib/animation';
 import { downloadBlob, exportGifPreview, exportPngStrip } from './lib/exportStrip';
 import { exportProjectJson, importProjectJson } from './lib/projectFile';
-import { AnimationName, BackgroundMode, RigLayer, RigProject } from './types/rig';
-import { createBlankProject } from './lib/animation';
+import { AnimationName, BackgroundMode, LayerFrameOffset, RigLayer, RigProject } from './types/rig';
+
+const withLayerOrder = (layers: RigLayer[]) => layers.map((layer, index) => ({ ...layer, order: index }));
 
 function App() {
   const [project, setProject] = useState<RigProject>(() => createBlankProject());
@@ -26,25 +28,35 @@ function App() {
 
   useEffect(() => {
     if (!isPlaying) return;
-    const animation = project.animations[project.activeAnimation];
     const interval = window.setInterval(() => {
-      setProject((current) => syncLayersToFrame(current, (current.activeFrame + 1) % animation.frames.length));
+      setProject((current) => {
+        const animation = current.animations[current.activeAnimation];
+        return setActiveFrame(current, (current.activeFrame + 1) % animation.frames.length);
+      });
     }, 1000 / project.settings.fps);
     return () => window.clearInterval(interval);
-  }, [isPlaying, project.activeAnimation, project.activeFrame, project.animations, project.settings.fps]);
+  }, [isPlaying, project.settings.fps]);
 
   const patchLayer = (id: string, patch: Partial<RigLayer>) => {
-    setProject((current) => {
-      const transformPatch = Object.fromEntries(
-        Object.entries(patch).filter(([key]) => ['x', 'y', 'scale', 'rotation', 'opacity'].includes(key)),
-      );
-      const next = Object.keys(transformPatch).length ? setFrameTransform(current, id, transformPatch) : current;
-      return { ...next, layers: next.layers.map((layer) => (layer.id === id ? { ...layer, ...patch } : layer)) };
-    });
+    setProject((current) => ({
+      ...current,
+      layers: current.layers.map((layer) => (layer.id === id ? { ...layer, ...patch } : layer)),
+    }));
+  };
+
+  const patchFrameOffset = (id: string, patch: Partial<LayerFrameOffset>) => {
+    setProject((current) => setFrameOffset(current, id, patch));
+  };
+
+  const moveBaseLayer = (id: string, dx: number, dy: number) => {
+    setProject((current) => ({
+      ...current,
+      layers: current.layers.map((layer) => (layer.id === id ? { ...layer, x: layer.x + dx, y: layer.y + dy } : layer)),
+    }));
   };
 
   const addLayer = (layer: RigLayer) => {
-    setProject((current) => addLayerToProject(current, layer));
+    setProject((current) => addLayerToProject(current, { ...layer, order: current.layers.length }));
     setSelectedLayerId(layer.id);
   };
 
@@ -55,12 +67,12 @@ function App() {
       if (index < 0 || nextIndex < 0 || nextIndex >= current.layers.length) return current;
       const layers = [...current.layers];
       [layers[index], layers[nextIndex]] = [layers[nextIndex], layers[index]];
-      return { ...current, layers };
+      return { ...current, layers: withLayerOrder(layers) };
     });
   };
 
   const changeAnimation = (name: AnimationName) => {
-    setProject((current) => syncLayersToFrame({ ...current, activeAnimation: name }, 0));
+    setProject((current) => ({ ...current, activeAnimation: name, activeFrame: 0 }));
   };
 
   const exportWithMessage = async (kind: 'strip' | 'gif' | 'json') => {
@@ -111,7 +123,7 @@ function App() {
           project={project}
           selectedLayerId={selectedLayerId}
           onSelectLayer={setSelectedLayerId}
-          onMoveLayer={(id, dx, dy) => patchLayer(id, { x: (project.layers.find((layer) => layer.id === id)?.x ?? 0) + dx, y: (project.layers.find((layer) => layer.id === id)?.y ?? 0) + dy })}
+          onMoveLayer={moveBaseLayer}
         />
         <aside className="sidebar right">
           <ExportPanel
@@ -126,9 +138,11 @@ function App() {
       </div>
       <Timeline
         project={project}
+        selectedLayerId={selectedLayerId}
         isPlaying={isPlaying}
         onAnimationChange={changeAnimation}
-        onFrameChange={(frame) => setProject((current) => syncLayersToFrame(current, frame))}
+        onFrameChange={(frame) => setProject((current) => setActiveFrame(current, frame))}
+        onFrameOffsetPatch={patchFrameOffset}
         onFpsChange={(fps) => setProject((current) => ({ ...current, settings: { ...current.settings, fps: Math.max(1, fps || 1) } }))}
         onTogglePlayback={() => setIsPlaying((playing) => !playing)}
         onOnionSkinChange={(onionSkin) => setProject((current) => ({ ...current, onionSkin }))}

@@ -1,4 +1,4 @@
-export type AnimationName = 'idle' | 'attack' | 'spell';
+export type AnimationName = 'idle' | 'slash' | 'stab' | 'spell';
 
 export type BackgroundMode = 'transparent' | 'black' | 'gray' | 'checkerboard' | 'screenshot';
 
@@ -17,15 +17,22 @@ export interface RigLayer extends TransformState {
   visible: boolean;
   pivotX: number;
   pivotY: number;
+  order: number;
   width: number;
   height: number;
 }
 
-export interface LayerKeyframe extends TransformState {}
+export interface LayerFrameOffset {
+  dx: number;
+  dy: number;
+  dScale: number;
+  dRotation: number;
+  dOpacity: number;
+}
 
 export interface AnimationFrame {
   index: number;
-  layers: Record<string, LayerKeyframe>;
+  layers: Record<string, LayerFrameOffset>;
 }
 
 export interface RigAnimation {

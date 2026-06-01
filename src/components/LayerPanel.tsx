@@ -28,6 +28,8 @@ export function LayerPanel({ layers, selectedLayerId, onSelect, onPatch, onRemov
       </div>
       {selected && (
         <div className="controls">
+          <h3>Base Layer Setup</h3>
+          <p className="hint">These persistent values are shared by idle, slash, stab, spell, and future animations.</p>
           <input value={selected.name} onChange={(e) => onPatch(selected.id, { name: e.target.value })} />
           <label><input type="checkbox" checked={selected.visible} onChange={(e) => onPatch(selected.id, { visible: e.target.checked })} /> Visible</label>
           <Range label="X" value={selected.x} min={-512} max={1536} step={1} onChange={(x) => onPatch(selected.id, { x })} />

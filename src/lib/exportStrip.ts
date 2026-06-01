@@ -1,4 +1,4 @@
-import { applyKeyframeToLayer } from './animation';
+import { combineLayerWithOffset } from './animation';
 import { drawLayer, loadLayerImages } from './canvasRender';
 import { RigProject } from '../types/rig';
 import { GIFEncoder, applyPalette, quantize } from 'gifenc';
@@ -34,7 +34,7 @@ export const exportPngStrip = async (project: RigProject): Promise<Blob> => {
     ctx.save();
     ctx.translate(frameIndex * frameWidth, 0);
     for (const { layer, image } of loadedLayers) {
-      drawLayer(ctx, image, applyKeyframeToLayer(layer, frame.layers[layer.id]));
+      drawLayer(ctx, image, combineLayerWithOffset(layer, frame.layers[layer.id]));
     }
     ctx.restore();
   });
@@ -54,7 +54,7 @@ export const exportGifPreview = async (project: RigProject): Promise<Blob> => {
   for (const frame of animation.frames) {
     ctx.clearRect(0, 0, frameWidth, frameHeight);
     for (const { layer, image } of loadedLayers) {
-      drawLayer(ctx, image, applyKeyframeToLayer(layer, frame.layers[layer.id]));
+      drawLayer(ctx, image, combineLayerWithOffset(layer, frame.layers[layer.id]));
     }
     const data = ctx.getImageData(0, 0, frameWidth, frameHeight).data;
     const palette = quantize(data, 256, { format: 'rgba4444', oneBitAlpha: true });
