@@ -1,6 +1,7 @@
 import { PointerEvent, useEffect, useRef, useState } from 'react';
 import { RigProject } from '../types/rig';
 import { drawProjectFrame, hitTestLayer } from '../lib/canvasRender';
+import { combineLayerWithOffset } from '../lib/animation';
 
 interface CanvasStageProps {
   project: RigProject;
@@ -11,7 +12,7 @@ interface CanvasStageProps {
 
 export function CanvasStage({ project, selectedLayerId, onSelectLayer, onMoveLayer }: CanvasStageProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [drag, setDrag] = useState<{ id: string; x: number; y: number } | null>(null);
+  const [drag, setDrag] = useState<{ id: string; x: number; y: number; pointerId: number } | null>(null);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -31,11 +32,15 @@ export function CanvasStage({ project, selectedLayerId, onSelectLayer, onMoveLay
   };
 
   const handlePointerDown = (event: PointerEvent<HTMLCanvasElement>) => {
+    event.preventDefault();
     const point = canvasPoint(event);
-    const hit = [...project.layers].reverse().find((layer) => hitTestLayer(layer, point.x, point.y));
+    const frame = project.animations[project.activeAnimation].frames[project.activeFrame];
+    const hit = [...project.layers]
+      .sort((a, b) => b.order - a.order)
+      .find((layer) => hitTestLayer(combineLayerWithOffset(layer, frame?.layers[layer.id]), point.x, point.y));
     if (!hit) return;
     onSelectLayer(hit.id);
-    setDrag({ id: hit.id, x: point.x, y: point.y });
+    setDrag({ id: hit.id, x: point.x, y: point.y, pointerId: event.pointerId });
     event.currentTarget.setPointerCapture(event.pointerId);
   };
 
@@ -46,19 +51,26 @@ export function CanvasStage({ project, selectedLayerId, onSelectLayer, onMoveLay
     setDrag({ ...drag, x: point.x, y: point.y });
   };
 
+  const finishDrag = (event: PointerEvent<HTMLCanvasElement>) => {
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    setDrag(null);
+  };
+
   return (
-    <section className="stageWrap">
+    <section className="stageWrap canvasStage">
       <div className="stageHeader">
         <h2>1024×1024 Stage</h2>
-        <span>{selectedLayerId ? 'Drag selected artwork. Use layer controls for pivot, scale, rotation, and opacity.' : 'Upload and select a layer.'}</span>
+        <span>{selectedLayerId ? 'Drag selected artwork. Base setup stays shared across animations.' : 'Upload and select a layer.'}</span>
       </div>
       <canvas
         ref={canvasRef}
         className="stageCanvas"
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
-        onPointerUp={() => setDrag(null)}
-        onPointerCancel={() => setDrag(null)}
+        onPointerUp={finishDrag}
+        onPointerCancel={finishDrag}
       />
     </section>
   );

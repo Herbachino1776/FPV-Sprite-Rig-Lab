@@ -1,5 +1,5 @@
 import { BackgroundMode, LoadedImage, RigLayer, RigProject } from '../types/rig';
-import { applyKeyframeToLayer } from './animation';
+import { combineLayerWithOffset } from './animation';
 
 export interface RenderOptions {
   includeBackground?: boolean;
@@ -23,7 +23,7 @@ export const loadImage = (src: string): Promise<HTMLImageElement> => {
 };
 
 export const loadLayerImages = async (layers: RigLayer[]): Promise<LoadedImage[]> => {
-  const loaded = await Promise.all(layers.map(async (layer) => ({ layer, image: await loadImage(layer.imageSrc) })));
+  const loaded = await Promise.all([...layers].sort((a, b) => a.order - b.order).map(async (layer) => ({ layer, image: await loadImage(layer.imageSrc) })));
   return loaded;
 };
 
@@ -83,12 +83,12 @@ export const drawProjectFrame = async (
   if (options.onionSkin && frameIndex > 0) {
     const previous = animation.frames[frameIndex - 1];
     for (const { layer, image } of loadedLayers) {
-      drawLayer(ctx, image, applyKeyframeToLayer(layer, previous.layers[layer.id]), 0.25);
+      drawLayer(ctx, image, combineLayerWithOffset(layer, previous.layers[layer.id]), 0.25);
     }
   }
 
   for (const { layer, image } of loadedLayers) {
-    drawLayer(ctx, image, applyKeyframeToLayer(layer, frame.layers[layer.id]));
+    drawLayer(ctx, image, combineLayerWithOffset(layer, frame.layers[layer.id]));
   }
 };
 

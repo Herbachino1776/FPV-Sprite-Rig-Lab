@@ -36,6 +36,7 @@ export function AssetUploader({ onAddLayer, onBackgroundUpload }: AssetUploaderP
         opacity: 1,
         pivotX: dimensions.width / 2,
         pivotY: dimensions.height / 2,
+        order: 0,
         width: dimensions.width,
         height: dimensions.height,
       };
