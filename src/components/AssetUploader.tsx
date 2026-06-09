@@ -52,19 +52,20 @@ export function AssetUploader({ onAddLayer, onBackgroundUpload }: AssetUploaderP
   };
 
   return (
-    <details className="panel controlSection" open>
-      <summary className="panelSummary"><span>Assets</span><small>PNG layers + backdrop</small></summary>
-      <div className="panelBody">
-        <label className="fileDrop">
-          Upload transparent PNG layers
-          <input type="file" accept="image/png" multiple onChange={handleLayerFiles} />
-        </label>
-        <label className="fileDrop secondary">
-          Upload screenshot background
-          <input type="file" accept="image/*" onChange={handleScreenshot} />
-        </label>
-        <p className="hint compact">Layer uploads stay in the browser and save into exported project JSON.</p>
+    <section className="sectionCard assetUploader" aria-label="Asset upload controls">
+      <div className="sectionTitle">
+        <h3>Assets</h3>
+        <small>PNG layers + backdrop</small>
       </div>
-    </details>
+      <label className="fileDrop">
+        Upload transparent PNG layers
+        <input type="file" accept="image/png" multiple onChange={handleLayerFiles} />
+      </label>
+      <label className="fileDrop secondary">
+        Upload screenshot background
+        <input type="file" accept="image/*" onChange={handleScreenshot} />
+      </label>
+      <p className="hint compact">Layer uploads stay in the browser and save into exported project JSON.</p>
+    </section>
   );
 }
