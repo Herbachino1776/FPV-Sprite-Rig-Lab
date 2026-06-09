@@ -1,5 +1,5 @@
 import { BackgroundMode, LoadedImage, RigLayer, RigProject } from '../types/rig';
-import { combineLayerWithOffset } from './animation';
+import { Matrix2D, computeLayerTransforms, invert, transformPoint } from './layerTransforms';
 
 export interface RenderOptions {
   includeBackground?: boolean;
@@ -53,14 +53,19 @@ export const drawBackground = (
   }
 };
 
-export const drawLayer = (ctx: CanvasRenderingContext2D, image: HTMLImageElement, layer: RigLayer, opacityMultiplier = 1) => {
+export const drawMatrixLayer = (
+  ctx: CanvasRenderingContext2D,
+  image: HTMLImageElement,
+  layer: RigLayer,
+  matrix: Matrix2D,
+  opacity: number,
+  opacityMultiplier = 1,
+) => {
   if (!layer.visible) return;
   ctx.save();
-  ctx.globalAlpha = Math.max(0, Math.min(1, layer.opacity * opacityMultiplier));
-  ctx.translate(layer.x, layer.y);
-  ctx.rotate((layer.rotation * Math.PI) / 180);
-  ctx.scale(layer.scale, layer.scale);
-  ctx.drawImage(image, -layer.pivotX, -layer.pivotY, layer.width, layer.height);
+  ctx.globalAlpha = Math.max(0, Math.min(1, opacity * opacityMultiplier));
+  ctx.transform(matrix.a, matrix.b, matrix.c, matrix.d, matrix.e, matrix.f);
+  ctx.drawImage(image, 0, 0, layer.width, layer.height);
   ctx.restore();
 };
 
@@ -73,7 +78,6 @@ export const drawProjectFrame = async (
   const height = project.settings.frameHeight;
   const frameIndex = options.frameIndex ?? project.activeFrame;
   const animation = project.animations[project.activeAnimation];
-  const frame = animation.frames[frameIndex] ?? animation.frames[0];
   const loadedLayers = await loadLayerImages(project.layers);
   const screenshot = project.backgroundImageSrc ? await loadImage(project.backgroundImageSrc) : undefined;
 
@@ -81,22 +85,21 @@ export const drawProjectFrame = async (
   if (options.includeBackground) drawBackground(ctx, project.backgroundMode, width, height, screenshot);
 
   if (options.onionSkin && frameIndex > 0) {
-    const previous = animation.frames[frameIndex - 1];
+    const previousTransforms = computeLayerTransforms(project, frameIndex - 1);
     for (const { layer, image } of loadedLayers) {
-      drawLayer(ctx, image, combineLayerWithOffset(layer, previous.layers[layer.id]), 0.25);
+      const transform = previousTransforms.get(layer.id);
+      if (transform) drawMatrixLayer(ctx, image, layer, transform.matrix, transform.opacity, 0.25);
     }
   }
 
+  const transforms = computeLayerTransforms(project, frameIndex);
   for (const { layer, image } of loadedLayers) {
-    drawLayer(ctx, image, combineLayerWithOffset(layer, frame.layers[layer.id]));
+    const transform = transforms.get(layer.id);
+    if (transform) drawMatrixLayer(ctx, image, layer, transform.matrix, transform.opacity);
   }
 };
 
-export const hitTestLayer = (layer: RigLayer, pointX: number, pointY: number) => {
-  const radians = (-layer.rotation * Math.PI) / 180;
-  const dx = pointX - layer.x;
-  const dy = pointY - layer.y;
-  const localX = (dx * Math.cos(radians) - dy * Math.sin(radians)) / layer.scale + layer.pivotX;
-  const localY = (dx * Math.sin(radians) + dy * Math.cos(radians)) / layer.scale + layer.pivotY;
-  return localX >= 0 && localX <= layer.width && localY >= 0 && localY <= layer.height;
+export const hitTestLayer = (layer: RigLayer, pointX: number, pointY: number, matrix: Matrix2D) => {
+  const local = transformPoint(invert(matrix), pointX, pointY);
+  return local.x >= 0 && local.x <= layer.width && local.y >= 0 && local.y <= layer.height;
 };

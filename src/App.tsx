@@ -8,6 +8,7 @@ import {
   applySlashPreset,
   applyStabPreset,
   createBlankProject,
+  createNeutralOffset,
   normalizeOffset,
   removeLayerFromProject,
   setActiveFrame,
@@ -15,15 +16,17 @@ import {
 } from './lib/animation';
 import { downloadBlob, exportGifPreview, exportPngStrip } from './lib/exportStrip';
 import { exportProjectJson, importProjectJson } from './lib/projectFile';
-import { AnimationName, BackgroundMode, LayerFrameOffset, RigLayer, RigProject } from './types/rig';
+import { AnimationName, BackgroundMode, LayerAttachment, LayerFrameOffset, RigLayer, RigProject } from './types/rig';
+import { canAttachLayer, createAttachmentFromCurrentPlacement } from './lib/layerTransforms';
 
 const withLayerOrder = (layers: RigLayer[]) => layers.map((layer, index) => ({ ...layer, order: index }));
 
-type InspectorTab = 'assets' | 'base' | 'offset' | 'animation' | 'export';
+type InspectorTab = 'assets' | 'base' | 'attachment' | 'offset' | 'animation' | 'export';
 
 const inspectorTabs: Array<{ id: InspectorTab; label: string; shortLabel: string }> = [
   { id: 'assets', label: 'Assets / Layers', shortLabel: 'Assets' },
   { id: 'base', label: 'Base Layer Setup', shortLabel: 'Base' },
+  { id: 'attachment', label: 'Attachment', shortLabel: 'Attach' },
   { id: 'offset', label: 'Frame Offset', shortLabel: 'Offset' },
   { id: 'animation', label: 'Animation', shortLabel: 'Anim' },
   { id: 'export', label: 'Export', shortLabel: 'Export' },
@@ -61,8 +64,55 @@ function App() {
   const moveBaseLayer = (id: string, dx: number, dy: number) => {
     setProject((current) => ({
       ...current,
-      layers: current.layers.map((layer) => (layer.id === id ? { ...layer, x: layer.x + dx, y: layer.y + dy } : layer)),
+      layers: current.layers.map((layer) => {
+        if (layer.id !== id) return layer;
+        if (layer.attachment) {
+          return { ...layer, attachment: { ...layer.attachment, localX: layer.attachment.localX + dx, localY: layer.attachment.localY + dy } };
+        }
+        return { ...layer, x: layer.x + dx, y: layer.y + dy };
+      }),
     }));
+  };
+
+  const attachLayer = (childId: string, parentId: string) => {
+    setProject((current) => {
+      const attachment = createAttachmentFromCurrentPlacement(current, childId, parentId);
+      if (!attachment) return current;
+      return {
+        ...current,
+        layers: current.layers.map((layer) => (layer.id === childId ? { ...layer, attachment } : layer)),
+        animations: Object.fromEntries(
+          Object.entries(current.animations).map(([name, animation]) => [
+            name,
+            {
+              ...animation,
+              frames: animation.frames.map((frame) => ({
+                ...frame,
+                layers: { ...frame.layers, [childId]: createNeutralOffset() },
+              })),
+            },
+          ]),
+        ) as RigProject['animations'],
+      };
+    });
+  };
+
+  const detachLayer = (id: string) => {
+    setProject((current) => ({
+      ...current,
+      layers: current.layers.map((layer) => (layer.id === id ? { ...layer, attachment: undefined } : layer)),
+    }));
+  };
+
+  const patchAttachment = (id: string, patch: Partial<LayerAttachment>) => {
+    setProject((current) => ({
+      ...current,
+      layers: current.layers.map((layer) => (layer.id === id && layer.attachment ? { ...layer, attachment: { ...layer.attachment, ...patch } } : layer)),
+    }));
+  };
+
+  const resetAttachmentOffset = (id: string) => {
+    patchAttachment(id, { localX: 0, localY: 0, localScale: 1, localRotation: 0 });
   };
 
   const addLayer = (layer: RigLayer) => {
@@ -162,6 +212,10 @@ function App() {
           }}
           onReorderLayer={reorderLayer}
           onFrameOffsetPatch={patchFrameOffset}
+          onAttachLayer={attachLayer}
+          onDetachLayer={detachLayer}
+          onAttachmentPatch={patchAttachment}
+          onAttachmentReset={resetAttachmentOffset}
           onAnimationChange={changeAnimation}
           onFrameChange={(frame) => setProject((current) => setActiveFrame(current, frame))}
           onFpsChange={(fps) => setProject((current) => ({ ...current, settings: { ...current.settings, fps: Math.max(1, fps || 1) } }))}
@@ -252,6 +306,10 @@ interface InspectorPanelProps {
   onRemoveLayer: (id: string) => void;
   onReorderLayer: (id: string, direction: -1 | 1) => void;
   onFrameOffsetPatch: (id: string, patch: Partial<LayerFrameOffset>) => void;
+  onAttachLayer: (childId: string, parentId: string) => void;
+  onDetachLayer: (id: string) => void;
+  onAttachmentPatch: (id: string, patch: Partial<LayerAttachment>) => void;
+  onAttachmentReset: (id: string) => void;
   onAnimationChange: (name: AnimationName) => void;
   onFrameChange: (frame: number) => void;
   onFpsChange: (fps: number) => void;
@@ -294,6 +352,7 @@ function InspectorPanel(props: InspectorPanelProps) {
       <div className="inspectorBody">
         {activeTab === 'assets' && <AssetsSection {...props} />}
         {activeTab === 'base' && <BaseLayerSection {...props} />}
+        {activeTab === 'attachment' && <AttachmentSection {...props} />}
         {activeTab === 'offset' && <FrameOffsetSection {...props} />}
         {activeTab === 'animation' && <AnimationSection {...props} />}
         {activeTab === 'export' && <ExportSection {...props} />}
@@ -355,6 +414,7 @@ function BaseLayerSection({ selectedLayer, onPatchLayer, onReorderLayer, onRemov
         <p className="hint compact">These values are the stable rig pose. Animation offsets stay relative to this base so switching animations does not destroy positioning work.</p>
         <input aria-label="Layer name" value={selectedLayer.name} onChange={(e) => onPatchLayer(selectedLayer.id, { name: e.target.value })} />
         <label className="checkControl"><input type="checkbox" checked={selectedLayer.visible} onChange={(e) => onPatchLayer(selectedLayer.id, { visible: e.target.checked })} /> Visible</label>
+        {selectedLayer.attachment && <p className="hint compact lockHint">Locked to a parent layer. Base transform stays available, but stage dragging and Attachment Offset controls adjust the held weapon placement.</p>}
         <div className="rangeGrid">
           <Range label="X" value={selectedLayer.x} min={-512} max={1536} step={1} onChange={(x) => onPatchLayer(selectedLayer.id, { x })} />
           <Range label="Y" value={selectedLayer.y} min={-512} max={1536} step={1} onChange={(y) => onPatchLayer(selectedLayer.id, { y })} />
@@ -369,6 +429,85 @@ function BaseLayerSection({ selectedLayer, onPatchLayer, onReorderLayer, onRemov
           <button onClick={() => onReorderLayer(selectedLayer.id, -1)}>Move Down</button>
           <button className="danger" onClick={() => onRemoveLayer(selectedLayer.id)}>Remove</button>
         </div>
+      </div>
+    </section>
+  );
+}
+
+
+function AttachmentSection({ project, selectedLayer, onAttachLayer, onDetachLayer, onAttachmentPatch, onAttachmentReset }: InspectorPanelProps) {
+  const [parentId, setParentId] = useState('');
+
+  useEffect(() => {
+    if (selectedLayer?.attachment?.parentLayerId) {
+      setParentId(selectedLayer.attachment.parentLayerId);
+      return;
+    }
+    setParentId('');
+  }, [selectedLayer?.id, selectedLayer?.attachment?.parentLayerId]);
+
+  if (!selectedLayer) {
+    return <EmptyState title="Select a layer" copy="Choose a weapon or hand layer before creating a parent/child attachment." />;
+  }
+
+  const attachedParent = project.layers.find((layer) => layer.id === selectedLayer.attachment?.parentLayerId);
+  const parentOptions = project.layers
+    .filter((layer) => layer.visible && canAttachLayer(project.layers, selectedLayer.id, layer.id))
+    .sort((a, b) => {
+      const priority = (name: string) => {
+        const normalized = name.toLowerCase();
+        if (normalized.includes('right hand')) return 0;
+        if (normalized.includes('left hand')) return 1;
+        if (normalized.includes('right arm')) return 2;
+        if (normalized.includes('left arm')) return 3;
+        return 4;
+      };
+      return priority(a.name) - priority(b.name) || a.order - b.order;
+    });
+  const effectiveParentId = parentId || selectedLayer.attachment?.parentLayerId || '';
+
+  return (
+    <section className="tabSection" aria-label="Layer attachment controls">
+      <div className="sectionCard">
+        <div className="sectionTitle">
+          <h3>Attachment</h3>
+          <small>{selectedLayer.attachment && attachedParent ? `Attached to: ${attachedParent.name}` : 'No parent'}</small>
+        </div>
+        <p className="hint compact">Lock weapons to a hand or arm. Use “Set Grip From Current Placement” after positioning the weapon so its current grip becomes the local hand offset.</p>
+        <label className="fieldLabel">
+          Attach To
+          <select value={effectiveParentId} onChange={(e) => setParentId(e.target.value)}>
+            <option value="">None</option>
+            {parentOptions.map((layer) => (
+              <option key={layer.id} value={layer.id}>{layer.name}</option>
+            ))}
+          </select>
+        </label>
+        {selectedLayer.attachment && attachedParent && <p className="attachedBadge">Attached to: {attachedParent.name}</p>}
+        <div className="buttonRow wrap">
+          <button className="primary" disabled={!effectiveParentId} onClick={() => effectiveParentId && onAttachLayer(selectedLayer.id, effectiveParentId)}>Attach to Selected Parent</button>
+          <button disabled={!effectiveParentId} onClick={() => effectiveParentId && onAttachLayer(selectedLayer.id, effectiveParentId)}>Set Grip From Current Placement</button>
+          <button onClick={() => onAttachmentReset(selectedLayer.id)} disabled={!selectedLayer.attachment}>Reset Local Offset</button>
+          <button className="danger" onClick={() => onDetachLayer(selectedLayer.id)} disabled={!selectedLayer.attachment}>Detach</button>
+        </div>
+        {selectedLayer.attachment ? (
+          <>
+            <div className="rangeGrid">
+              <Range label="Local X" value={selectedLayer.attachment.localX} min={-512} max={512} step={1} onChange={(localX) => onAttachmentPatch(selectedLayer.id, { localX })} />
+              <Range label="Local Y" value={selectedLayer.attachment.localY} min={-512} max={512} step={1} onChange={(localY) => onAttachmentPatch(selectedLayer.id, { localY })} />
+              <Range label="Local Scale" value={selectedLayer.attachment.localScale} min={0.05} max={4} step={0.01} onChange={(localScale) => onAttachmentPatch(selectedLayer.id, { localScale })} />
+              <Range label="Local Rotation" value={selectedLayer.attachment.localRotation} min={-180} max={180} step={1} onChange={(localRotation) => onAttachmentPatch(selectedLayer.id, { localRotation })} />
+            </div>
+            <div className="inheritGrid">
+              <label className="checkControl"><input type="checkbox" checked={selectedLayer.attachment.inheritPosition} onChange={(e) => onAttachmentPatch(selectedLayer.id, { inheritPosition: e.target.checked })} /> Inherit position</label>
+              <label className="checkControl"><input type="checkbox" checked={selectedLayer.attachment.inheritRotation} onChange={(e) => onAttachmentPatch(selectedLayer.id, { inheritRotation: e.target.checked })} /> Inherit rotation</label>
+              <label className="checkControl"><input type="checkbox" checked={selectedLayer.attachment.inheritScale} onChange={(e) => onAttachmentPatch(selectedLayer.id, { inheritScale: e.target.checked })} /> Inherit scale</label>
+              <label className="checkControl"><input type="checkbox" checked={selectedLayer.attachment.inheritOpacity} onChange={(e) => onAttachmentPatch(selectedLayer.id, { inheritOpacity: e.target.checked })} /> Inherit opacity</label>
+            </div>
+          </>
+        ) : (
+          <p className="hint compact">Unattached layers use normal world/canvas X, Y, Scale, and Rotation controls.</p>
+        )}
       </div>
     </section>
   );
