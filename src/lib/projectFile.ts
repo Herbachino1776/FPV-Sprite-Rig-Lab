@@ -1,4 +1,4 @@
-import { AnimationName, LayerFrameOffset, RigAnimation, RigLayer, RigProject } from '../types/rig';
+import { AnimationName, LayerAttachment, LayerFrameOffset, RigAnimation, RigLayer, RigProject } from '../types/rig';
 import { ANIMATION_FRAME_COUNTS, DEFAULT_FPS, DEFAULT_FRAME_HEIGHT, DEFAULT_FRAME_WIDTH, createAnimation, normalizeOffset } from './animation';
 
 type LegacyLayerFrame = Partial<LayerFrameOffset> & {
@@ -50,7 +50,15 @@ const normalizeProject = (project: ImportedProject): RigProject => {
     pivotX: layer.pivotX ?? layer.width / 2,
     pivotY: layer.pivotY ?? layer.height / 2,
     order: layer.order ?? index,
+    attachment: normalizeImportedAttachment(layer.attachment),
   }));
+
+  const layerIds = new Set(layers.map((layer) => layer.id));
+  layers.forEach((layer) => {
+    if (layer.attachment && (!layerIds.has(layer.attachment.parentLayerId) || layer.attachment.parentLayerId === layer.id)) {
+      layer.attachment = undefined;
+    }
+  });
 
   const animations = Object.fromEntries(
     (['idle', 'slash', 'stab', 'spell'] as AnimationName[]).map((name) => {
@@ -74,6 +82,25 @@ const normalizeProject = (project: ImportedProject): RigProject => {
     onionSkin: project.onionSkin ?? false,
     backgroundMode: project.backgroundMode ?? 'checkerboard',
     backgroundImageSrc: project.backgroundImageSrc,
+  };
+};
+
+const normalizeImportedAttachment = (attachment: Partial<LayerAttachment> | undefined): LayerAttachment | undefined => {
+  if (!attachment?.parentLayerId) return undefined;
+  return {
+    parentLayerId: attachment.parentLayerId,
+    parentAnchorX: attachment.parentAnchorX ?? 0,
+    parentAnchorY: attachment.parentAnchorY ?? 0,
+    childAnchorX: attachment.childAnchorX ?? 0,
+    childAnchorY: attachment.childAnchorY ?? 0,
+    localX: attachment.localX ?? 0,
+    localY: attachment.localY ?? 0,
+    localScale: attachment.localScale ?? 1,
+    localRotation: attachment.localRotation ?? 0,
+    inheritPosition: attachment.inheritPosition ?? true,
+    inheritRotation: attachment.inheritRotation ?? true,
+    inheritScale: attachment.inheritScale ?? true,
+    inheritOpacity: attachment.inheritOpacity ?? true,
   };
 };
 

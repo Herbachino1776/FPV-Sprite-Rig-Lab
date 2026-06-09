@@ -10,6 +10,22 @@ export interface TransformState {
   opacity: number;
 }
 
+export type LayerAttachment = {
+  parentLayerId: string;
+  parentAnchorX: number;
+  parentAnchorY: number;
+  childAnchorX: number;
+  childAnchorY: number;
+  localX: number;
+  localY: number;
+  localScale: number;
+  localRotation: number;
+  inheritPosition: boolean;
+  inheritRotation: boolean;
+  inheritScale: boolean;
+  inheritOpacity: boolean;
+};
+
 export interface RigLayer extends TransformState {
   id: string;
   name: string;
@@ -20,6 +36,7 @@ export interface RigLayer extends TransformState {
   order: number;
   width: number;
   height: number;
+  attachment?: LayerAttachment;
 }
 
 export interface LayerFrameOffset {

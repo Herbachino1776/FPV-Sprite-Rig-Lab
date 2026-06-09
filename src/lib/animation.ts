@@ -130,7 +130,9 @@ export const addLayerToProject = (project: RigProject, layer: RigLayer): RigProj
 
 export const removeLayerFromProject = (project: RigProject, layerId: string): RigProject => ({
   ...project,
-  layers: project.layers.filter((layer) => layer.id !== layerId),
+  layers: project.layers
+    .filter((layer) => layer.id !== layerId)
+    .map((layer) => layer.attachment?.parentLayerId === layerId ? { ...layer, attachment: undefined } : layer),
   animations: Object.fromEntries(
     Object.entries(project.animations).map(([name, animation]) => [
       name,
@@ -184,7 +186,7 @@ const applyPreset = (
     name,
     frames: Array.from({ length: frameCount }, (_, index) => ({
       index,
-      layers: Object.fromEntries(project.layers.map((layer) => [layer.id, offset(index)])),
+      layers: Object.fromEntries(project.layers.map((layer) => [layer.id, layer.attachment ? createNeutralOffset() : offset(index)])),
     })),
   };
   return {

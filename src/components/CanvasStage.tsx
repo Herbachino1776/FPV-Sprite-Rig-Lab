@@ -1,7 +1,7 @@
 import { PointerEvent, useEffect, useRef, useState } from 'react';
 import { RigProject } from '../types/rig';
 import { drawProjectFrame, hitTestLayer } from '../lib/canvasRender';
-import { combineLayerWithOffset } from '../lib/animation';
+import { computeLayerTransforms } from '../lib/layerTransforms';
 
 interface CanvasStageProps {
   project: RigProject;
@@ -34,10 +34,13 @@ export function CanvasStage({ project, selectedLayerId, onSelectLayer, onMoveLay
   const handlePointerDown = (event: PointerEvent<HTMLCanvasElement>) => {
     event.preventDefault();
     const point = canvasPoint(event);
-    const frame = project.animations[project.activeAnimation].frames[project.activeFrame];
+    const transforms = computeLayerTransforms(project);
     const hit = [...project.layers]
       .sort((a, b) => b.order - a.order)
-      .find((layer) => hitTestLayer(combineLayerWithOffset(layer, frame?.layers[layer.id]), point.x, point.y));
+      .find((layer) => {
+        const transform = transforms.get(layer.id);
+        return transform ? hitTestLayer(layer, point.x, point.y, transform.matrix) : false;
+      });
     if (!hit) return;
     onSelectLayer(hit.id);
     setDrag({ id: hit.id, x: point.x, y: point.y, pointerId: event.pointerId });
@@ -62,7 +65,7 @@ export function CanvasStage({ project, selectedLayerId, onSelectLayer, onMoveLay
     <section className="stageWrap canvasStage">
       <div className="stageHeader">
         <h2>1024×1024 Stage</h2>
-        <span>{selectedLayerId ? 'Drag selected artwork. Base setup stays shared across animations.' : 'Upload and select a layer.'}</span>
+        <span>{selectedLayerId ? 'Drag selected artwork. Attached layers move by local hand offset.' : 'Upload and select a layer.'}</span>
       </div>
       <canvas
         ref={canvasRef}

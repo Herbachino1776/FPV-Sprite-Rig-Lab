@@ -214,7 +214,7 @@ input[type="file"] { display: none; }
 .inspectorHeader span { color: var(--text-soft); font-size: 0.78rem; text-align: right; max-width: 42%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .inspectorTabs {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 0.35rem;
   padding: 0.65rem;
   border-bottom: 1px solid rgba(61, 80, 104, 0.55);
@@ -319,6 +319,23 @@ input[type="file"] { display: none; }
 .rangeControl input[type="range"]::-moz-range-track { height: 8px; border-radius: 999px; background: #2d3d52; }
 .rangeControl input[type="range"]::-moz-range-thumb { width: 22px; height: 22px; border: 2px solid #b7dcff; border-radius: 50%; background: #a8d4ff; }
 .buttonRow { display: flex; gap: 0.5rem; }
+.attachedBadge {
+  margin: 0;
+  border: 1px solid rgba(111, 184, 255, 0.42);
+  border-radius: 999px;
+  padding: 0.48rem 0.68rem;
+  color: #d9edff;
+  background: rgba(40, 93, 153, 0.24);
+  font-size: 0.86rem;
+  font-weight: 750;
+}
+.inheritGrid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.35rem 0.6rem; }
+.lockHint {
+  border-left: 3px solid var(--accent);
+  padding: 0.58rem 0.7rem;
+  border-radius: 10px;
+  background: rgba(77, 139, 214, 0.14);
+}
 .buttonRow.wrap { flex-wrap: wrap; }
 .buttonGrid { display: grid; gap: 0.55rem; }
 .playbackRow { display: flex; flex-wrap: wrap; gap: 0.65rem; align-items: center; }
@@ -412,6 +429,7 @@ input[type="file"] { display: none; }
   .inspectorBody { max-height: min(680px, 72vh); }
   button, .importButton, .toolbarImport { min-height: 44px; padding: 0.68rem 0.85rem; }
   .rangeControl input[type="range"] { min-height: 46px; }
+  .inheritGrid { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 560px) {

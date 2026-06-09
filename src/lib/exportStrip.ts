@@ -1,7 +1,7 @@
-import { combineLayerWithOffset } from './animation';
-import { drawLayer, loadLayerImages } from './canvasRender';
+import { drawMatrixLayer, loadLayerImages } from './canvasRender';
 import { RigProject } from '../types/rig';
 import { GIFEncoder, applyPalette, quantize } from 'gifenc';
+import { computeLayerTransforms } from './layerTransforms';
 
 const makeCanvas = (width: number, height: number) => {
   const canvas = document.createElement('canvas');
@@ -30,11 +30,13 @@ export const exportPngStrip = async (project: RigProject): Promise<Blob> => {
   if (!ctx) throw new Error('Canvas not supported.');
   const loadedLayers = await loadLayerImages(project.layers);
 
-  animation.frames.forEach((frame, frameIndex) => {
+  animation.frames.forEach((_frame, frameIndex) => {
+    const transforms = computeLayerTransforms(project, frameIndex);
     ctx.save();
     ctx.translate(frameIndex * frameWidth, 0);
     for (const { layer, image } of loadedLayers) {
-      drawLayer(ctx, image, combineLayerWithOffset(layer, frame.layers[layer.id]));
+      const transform = transforms.get(layer.id);
+      if (transform) drawMatrixLayer(ctx, image, layer, transform.matrix, transform.opacity);
     }
     ctx.restore();
   });
@@ -51,10 +53,12 @@ export const exportGifPreview = async (project: RigProject): Promise<Blob> => {
   const loadedLayers = await loadLayerImages(project.layers);
   const gif = GIFEncoder();
 
-  for (const frame of animation.frames) {
+  for (let frameIndex = 0; frameIndex < animation.frames.length; frameIndex += 1) {
+    const transforms = computeLayerTransforms(project, frameIndex);
     ctx.clearRect(0, 0, frameWidth, frameHeight);
     for (const { layer, image } of loadedLayers) {
-      drawLayer(ctx, image, combineLayerWithOffset(layer, frame.layers[layer.id]));
+      const transform = transforms.get(layer.id);
+      if (transform) drawMatrixLayer(ctx, image, layer, transform.matrix, transform.opacity);
     }
     const data = ctx.getImageData(0, 0, frameWidth, frameHeight).data;
     const palette = quantize(data, 256, { format: 'rgba4444', oneBitAlpha: true });
